@@ -1,0 +1,7 @@
+[package]
+name = "rust-hoge-web"
+version = "0.1.0"
+authors = ["shinsuke"]
+
+[dependencies]
+iron = "*"
