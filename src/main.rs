@@ -1,6 +1,7 @@
 extern crate iron;
 extern crate router;
 extern crate params;
+extern crate regex;
 
 #[macro_use]
 extern crate serde_json;
@@ -9,26 +10,33 @@ use iron::prelude::*;
 use iron::status;
 use router::Router;
 use params::{Params, Value};
+use regex::Regex;
 
 fn is_slackbot(name: &String) -> bool {
     name == "slackbot"
 }
 
-fn gen_response(name: &String) -> String {
-    json!({"text": "Hello, ".to_string() + name}).to_string()
+fn gen_response(n: u32) -> String {
+    //json!({"text": "Hello, ".to_string() + name}).to_string()
+    json!({
+              "text": n.to_string() + " は素数です。"
+          })
+            .to_string()
 }
 
-fn is_prime(num: &u32) -> bool {
-    match *num {
+fn is_prime(num: u32) -> bool {
+    match num {
         1 => false,
         2 => true,
-        _ => seive(num).contains(num),
+        _ => seive(&num).last() == Some(&num),
     }
 }
 
 fn seive(num: &u32) -> Vec<u32> {
-    let nums: Vec<u32> = (2..num + 1).collect::<Vec<_>>();
-    let primes: Vec<u32> = Vec::new();
+    let nums: Vec<u32> = (1..)
+        .map(|i| i * 2 + 1)
+        .take(((num - 1) / 2) as usize)
+        .collect::<Vec<_>>();
 
     fn go(mut p: Vec<u32>, mut n: Vec<u32>, num: &u32) -> Vec<u32> {
         match n.first() {
@@ -44,7 +52,15 @@ fn seive(num: &u32) -> Vec<u32> {
         }
     }
 
-    return go(primes, nums, num);
+    go(vec![2], nums, num)
+}
+
+fn capture_num(text: &String) -> Option<u32> {
+    let re = Regex::new(r"\d+").unwrap();
+    match re.captures(text) {
+        Some(caps) => Some(*(&caps[0].parse::<u32>().unwrap())),
+        _ => None,
+    }
 }
 
 fn main() {
@@ -59,34 +75,26 @@ fn main() {
 
         match map.find(&["user_name"]) {
             Some(&Value::String(ref user_name)) if !(is_slackbot(user_name)) => {
-                Ok(Response::with((status::Ok, gen_response(user_name))))
+                match map.find(&["text"]) {
+                    Some(&Value::String(ref text)) => {
+                        match capture_num(text) {
+                            Some(n) if is_prime(n) => {
+                                println!("Prime number: {:?}", n);
+                                Ok(Response::with((status::Ok, gen_response(n))))
+                            }
+                            _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
+                        }
+                    }
+                    _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
+                }
             }
             _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
         }
     }
 
-    fn print_iter<'a, I: Iterator<Item = &'a u32>>(iter: I) {
-        // ここでは引数の"型"は明示せず、traitだけでいい
-        for v in iter {
-            println!("The iterator's value is {}", v);
-        }
-    }
-
-
-    println!("{:?}", seive(&100));
-    println!("{}", is_prime(&3));
-    println!("{}", is_prime(&1000000));
-    println!("{}", is_prime(&256));
-    println!("{}", is_prime(&25));
-
-
-    let hoge_iter: Vec<u32> = vec![1, 2, 3];
-    print_iter(hoge_iter.iter());
-
     let mut router = Router::new();
     router.get("/", top_handler, "top");
     router.post("/hoge", hoge_handler, "hoge");
 
-    //Iron::new(router).http("0.0.0.0:3000").unwrap();
-
+    Iron::new(router).http("0.0.0.0:3000").unwrap();
 }
