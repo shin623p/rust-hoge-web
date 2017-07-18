@@ -12,8 +12,11 @@ use router::Router;
 use params::{Params, Value};
 use regex::Regex;
 
-fn is_slackbot(name: &String) -> bool {
-    name == "slackbot"
+fn is_slackbot(name: Option<&Value>) -> bool {
+    match name {
+        Some(&Value::String(ref n)) => n == "slackbot",
+        _ => false,
+    }
 }
 
 fn gen_response(n: u32) -> String {
@@ -55,12 +58,21 @@ fn seive(num: &u32) -> Vec<u32> {
     go(vec![2], nums, num)
 }
 
+fn capture_prime_num(text: Option<&Value>) -> Option<u32> {
+    if let Some(&Value::String(ref t)) = text {
+        match capture_num(t) {
+            Some(n) if is_prime(n) => Some(n),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 fn capture_num(text: &String) -> Option<u32> {
     let re = Regex::new(r"\d+").unwrap();
-    match re.captures(text) {
-        Some(caps) => Some(*(&caps[0].parse::<u32>().unwrap())),
-        _ => None,
-    }
+    re.captures(text)
+        .and_then(|caps| caps[0].parse::<u32>().ok())
 }
 
 fn main() {
@@ -73,20 +85,14 @@ fn main() {
 
         let map = req.get_ref::<Params>().unwrap();
 
-        match map.find(&["user_name"]) {
-            Some(&Value::String(ref user_name)) if !(is_slackbot(user_name)) => {
-                match map.find(&["text"]) {
-                    Some(&Value::String(ref text)) => {
-                        match capture_num(text) {
-                            Some(n) if is_prime(n) => {
-                                println!("Prime number: {:?}", n);
-                                Ok(Response::with((status::Ok, gen_response(n))))
-                            }
-                            _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
-                        }
-                    }
-                    _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
-                }
+        if is_slackbot(map.find(&["user_name"])) {
+            return Ok(Response::with((status::Ok, iron::status::NotFound)));
+        }
+
+        match capture_prime_num(map.find(&["text"])) {
+            Some(n) => {
+                println!("Prime number: {:?}", n);
+                Ok(Response::with((status::Ok, gen_response(n))))
             }
             _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
         }
