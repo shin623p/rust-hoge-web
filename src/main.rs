@@ -31,20 +31,10 @@ fn filter_prime(num: u32) -> Option<u32> {
         0 => None,
         1 => None,
         2 => Some(2),
-        // _ if seive(&num).last() == Some(&num) => Some(num),
         _ if seive(&num).ends_with(&[num]) => Some(num),
         _ => None,
     }
 }
-
-// fn is_prime(num: u32) -> bool {
-//     match num {
-//         0 => false,
-//         1 => false,
-//         2 => true,
-//         _ => seive(&num).last() == Some(&num),
-//     }
-// }
 
 fn seive(num: &u32) -> Vec<u32> {
     let nums: Vec<u32> = (1..)
@@ -92,7 +82,6 @@ fn capture_num(text: &String) -> Option<u32> {
 }
 
 fn main() {
-
     fn top_handler(_: &mut Request) -> IronResult<Response> {
         Ok(Response::with((status::Ok, "Hello, world!")))
     }
@@ -103,14 +92,13 @@ fn main() {
 
         let map = req.get_ref::<Params>().unwrap();
 
-        if is_slackbot(map.find(&["user_name"])) {
-            return res_400();
-        }
-
-       
-        match capture_prime_num(map.find(&["text"])).map(gen_response) {
-            Some(text) => res_ok(text), 
-            _ => res_400(), 
+        if let Some(text) = match is_slackbot(map.find(&["user_name"])) {
+               true => None,
+               false => capture_prime_num(map.find(&["text"])).map(gen_response),
+           } {
+            res_ok(text)
+        } else {
+            res_400()
         }
     }
 
