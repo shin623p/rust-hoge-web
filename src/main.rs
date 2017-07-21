@@ -20,20 +20,31 @@ fn is_slackbot(name: Option<&Value>) -> bool {
 }
 
 fn gen_response(n: u32) -> String {
-    //json!({"text": "Hello, ".to_string() + name}).to_string()
     json!({
               "text": n.to_string() + " は素数です。"
           })
             .to_string()
 }
 
-fn is_prime(num: u32) -> bool {
+fn filter_prime(num: u32) -> Option<u32> {
     match num {
-        1 => false,
-        2 => true,
-        _ => seive(&num).last() == Some(&num),
+        0 => None,
+        1 => None,
+        2 => Some(2),
+        // _ if seive(&num).last() == Some(&num) => Some(num),
+        _ if seive(&num).ends_with(&[num]) => Some(num),
+        _ => None,
     }
 }
+
+// fn is_prime(num: u32) -> bool {
+//     match num {
+//         0 => false,
+//         1 => false,
+//         2 => true,
+//         _ => seive(&num).last() == Some(&num),
+//     }
+// }
 
 fn seive(num: &u32) -> Vec<u32> {
     let nums: Vec<u32> = (1..)
@@ -44,13 +55,21 @@ fn seive(num: &u32) -> Vec<u32> {
     fn go(mut p: Vec<u32>, mut n: Vec<u32>, num: &u32) -> Vec<u32> {
         match n.first() {
             Some(&x) if x * x <= *num => {
-                p.push(x);
-                n.retain(|&i| i % x != 0);
-                go(p, n, num)
+                go((|| {
+                        p.push(x);
+                        p
+                    })(),
+                   (|| {
+                        n.retain(|&i| i % x != 0);
+                        n
+                    })(),
+                   num)
             }
             _ => {
-                p.append(&mut n);
-                p
+                (|| {
+                     p.append(&mut n);
+                     p
+                 })()
             }
         }
     }
@@ -60,10 +79,7 @@ fn seive(num: &u32) -> Vec<u32> {
 
 fn capture_prime_num(text: Option<&Value>) -> Option<u32> {
     if let Some(&Value::String(ref t)) = text {
-        match capture_num(t) {
-            Some(n) if is_prime(n) => Some(n),
-            _ => None,
-        }
+        capture_num(t).and_then(filter_prime)
     } else {
         None
     }
@@ -82,19 +98,19 @@ fn main() {
     }
 
     fn hoge_handler(req: &mut Request) -> IronResult<Response> {
+        let res_ok = |text| Ok(Response::with((status::Ok, text)));
+        let res_400 = || Ok(Response::with((status::Ok, iron::status::BadRequest)));
 
         let map = req.get_ref::<Params>().unwrap();
 
         if is_slackbot(map.find(&["user_name"])) {
-            return Ok(Response::with((status::Ok, iron::status::NotFound)));
+            return res_400();
         }
 
-        match capture_prime_num(map.find(&["text"])) {
-            Some(n) => {
-                println!("Prime number: {:?}", n);
-                Ok(Response::with((status::Ok, gen_response(n))))
-            }
-            _ => Ok(Response::with((status::Ok, iron::status::NotFound))),
+       
+        match capture_prime_num(map.find(&["text"])).map(gen_response) {
+            Some(text) => res_ok(text), 
+            _ => res_400(), 
         }
     }
 
