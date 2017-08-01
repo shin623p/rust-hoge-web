@@ -81,26 +81,31 @@ fn capture_num(text: &String) -> Option<u32> {
         .and_then(|caps| caps[0].parse::<u32>().ok())
 }
 
+fn hoge_handler(req: &mut Request) -> IronResult<Response> {
+
+    //let res_ok = |text| Ok(Response::with((status::Ok, text)));
+    //let res_400 = || Ok(Response::with((status::Ok, iron::status::BadRequest)));
+
+    let map = req.get_ref::<Params>().unwrap();
+
+    if let Some(text) = match is_slackbot(map.find(&["user_name"])) {
+           true => None,
+           false => capture_prime_num(map.find(&["text"])).map(gen_response),
+       } {
+        Ok(Response::with((status::Ok, text)))
+    } else {
+        Ok(Response::with((status::Ok, iron::status::BadRequest)))
+    }
+}
+
+
 fn main() {
-    fn top_handler(_: &mut Request) -> IronResult<Response> {
-        Ok(Response::with((status::Ok, "Hello, world!")))
-    }
 
-    fn hoge_handler(req: &mut Request) -> IronResult<Response> {
-        let res_ok = |text| Ok(Response::with((status::Ok, text)));
-        let res_400 = || Ok(Response::with((status::Ok, iron::status::BadRequest)));
+    let top_handler = |_: &mut Request| Ok(Response::with((status::Ok, "Hello, world!")));
 
-        let map = req.get_ref::<Params>().unwrap();
-
-        if let Some(text) = match is_slackbot(map.find(&["user_name"])) {
-               true => None,
-               false => capture_prime_num(map.find(&["text"])).map(gen_response),
-           } {
-            res_ok(text)
-        } else {
-            res_400()
-        }
-    }
+    // fn top_handler(_: &mut Request) -> IronResult<Response> {
+    //     Ok(Response::with((status::Ok, "Hello, world!")))
+    // }
 
     let mut router = Router::new();
     router.get("/", top_handler, "top");
